@@ -63,10 +63,13 @@ async def transcribe_audio(audio_bytes: bytes) -> dict:
         text = transcription.text or ""
         StatusIndicator.command(f"Transcribed [{language}]: {text}")
         return {"text": text, "language": language}
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Sarvam TTS status error: {e.response.status_code}")
+        logger.error(f"Sarvam TTS response body: {e.response.text}")
+        return b""
     except Exception as e:
-        StatusIndicator.error(f"STT failed: {e}")
-        logger.error(f"Groq Whisper error: {e}")
-        return {"text": "", "language": "en"}
+        logger.error(f"Sarvam TTS error: {e}")
+        return b""
 
 
 # ── TTS: Sarvam AI ────────────────────────────────────────────────────────────
