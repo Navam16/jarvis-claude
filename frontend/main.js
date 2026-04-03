@@ -21,7 +21,14 @@ function connectWebSocket() {
     wsConnected = true;
     $("#connection-status").text("Connected").css("color", "#00ff88");
     console.log("WebSocket connected");
-  };
+    
+    // keepalive ping every 20 seconds to prevent Render timeout
+    setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "ping" }));
+        }
+    }, 20000);
+};
 
   ws.onclose = () => {
     wsConnected = false;
