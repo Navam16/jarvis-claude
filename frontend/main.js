@@ -143,8 +143,11 @@ async function startRecording() {
 function stopRecording() {
   if (mediaRecorder && isRecording) {
     mediaRecorder.stop();
+    // Turn off the microphone hardware
     mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    DisplayMessage("Processing...");
+    
+    // Change the screen text so you know it stopped
+    DisplayMessage("Transcribing..."); 
     $("#MicBtn").css("color", "#ffffff");
   }
 }
