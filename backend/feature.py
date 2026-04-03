@@ -63,7 +63,7 @@ def generate_ai_reply(user_text: str) -> str:
         
     try:
         completion = chat_client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": "You are Jarvis, a highly capable and polite HR Assistant. Keep your answers brief, professional, and helpful."},
                 {"role": "user", "content": user_text}
