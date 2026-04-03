@@ -59,11 +59,14 @@ function handleServerMessage(data) {
       // agent text response
       receiverText(data.text);
       DisplayMessage(data.text);
-      break;
-
-    case "agent_info":
-      // which agent handled the request
-      console.log("Agent used:", data.agent);
+      
+      // AUTO-START LISTENING AFTER TEXT ARRIVES
+      // Wait 2 seconds so you have time to read his text before the mic opens
+      setTimeout(() => {
+        if (!isRecording) {
+           startRecording();
+        }
+      }, 2000);
       break;
 
     case "error":
