@@ -70,9 +70,7 @@ async def text_to_speech(text: str, language: str = "en") -> bytes:
         "target_language_code": lang_code,
         "speaker": SARVAM_SPEAKER,
         "model": SARVAM_MODEL,
-        "pitch": 0,
         "pace": 1.0,
-        "loudness": 1.5,
         "enable_preprocessing": True,
         "audio_format": "wav",
     }
