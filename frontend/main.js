@@ -10,6 +10,10 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 
+// ── SILENCE DETECTION VARIABLES ──
+let silenceTimeout = null;
+let volumeCheckInterval = null;
+
 function connectWebSocket() {
   ws = new WebSocket(BACKEND_WS_URL);
 
@@ -85,7 +89,6 @@ function handleServerMessage(data) {
 }
 
 // ── AUDIO PLAYBACK ──
-// ── AUDIO PLAYBACK ──
 async function playAudioResponse(audioBlob) {
   try {
     if (!audioContext) audioContext = new AudioContext();
@@ -112,7 +115,7 @@ async function playAudioResponse(audioBlob) {
   }
 }
 
-// ── VOICE CAPTURE ──
+// ── VOICE CAPTURE & SILENCE DETECTION ──
 async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -120,6 +123,40 @@ async function startRecording() {
     mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
     audioChunks = [];
     isRecording = true;
+
+    // --- SILENCE DETECTION LOGIC ---
+    const analyser = audioContext.createAnalyser();
+    const source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const resetSilenceTimer = () => {
+      clearTimeout(silenceTimeout);
+      silenceTimeout = setTimeout(() => {
+        if (isRecording) {
+          console.log("5 seconds of silence detected. Auto-stopping.");
+          stopRecording();
+        }
+      }, 5000); 
+    };
+
+    volumeCheckInterval = setInterval(() => {
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      let averageVolume = sum / bufferLength;
+
+      if (averageVolume > 10) { 
+        resetSilenceTimer();
+      }
+    }, 200);
+
+    resetSilenceTimer();
+    // -------------------------------
 
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) audioChunks.push(e.data);
@@ -140,6 +177,9 @@ async function startRecording() {
     mediaRecorder.start();
     $("#Oval").attr("hidden", true);
     $("#SiriWave").attr("hidden", false);
+    
+    // UI Updates: Show the stop button and format text
+    $("#StopMicBtn").removeAttr("hidden");
     DisplayMessage("Listening...");
     $("#MicBtn").css("color", "#ff4444");
 
@@ -155,9 +195,16 @@ function stopRecording() {
     // Turn off the microphone hardware
     mediaRecorder.stream.getTracks().forEach(t => t.stop());
     
+    // Turn off the silence trackers
+    clearInterval(volumeCheckInterval);
+    clearTimeout(silenceTimeout);
+    
     // Change the screen text so you know it stopped
     DisplayMessage("Transcribing..."); 
     $("#MicBtn").css("color", "#ffffff");
+    
+    // UI Updates: Hide the stop button
+    $("#StopMicBtn").attr("hidden", true);
   }
 }
 
@@ -226,6 +273,13 @@ $(document).ready(function () {
       startRecording();
     } else {
       // Second click: Stop and send
+      stopRecording();
+    }
+  });
+
+  // ── NEW STOP BUTTON CLICK ──
+  $("#StopMicBtn").on("click", function () {
+    if (isRecording) {
       stopRecording();
     }
   });
