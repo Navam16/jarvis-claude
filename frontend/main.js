@@ -221,6 +221,14 @@ $(document).ready(function () {
     }
   });
 
+  // ── CLICK WAVE TO STOP ──
+  // If the mic button is hidden, clicking the wave animation will stop it
+  $("#siri-container, #SiriWave").on("click", function () {
+    if (isRecording) {
+      stopRecording();
+    }
+  });
+
   // ── SEND BUTTON ──
   $("#SendBtn").on("click", function () {
     const message = $("#chatbox").val();
@@ -244,11 +252,15 @@ $(document).ready(function () {
     canvas.toggle();
   });
 
-  // ── KEYBOARD SHORTCUT (Cmd+J) ──
+  // ── KEYBOARD SHORTCUT (Cmd+J / Ctrl+J) ──
+  // Updated to act as a toggle as well
   document.addEventListener("keyup", function (e) {
-    if (e.key === "j" && e.metaKey) {
-      startRecording();
-      setTimeout(stopRecording, 4000); // auto stop after 4s
+    if (e.key === "j" && (e.metaKey || e.ctrlKey)) {
+      if (!isRecording) {
+        startRecording();
+      } else {
+        stopRecording();
+      }
     }
   });
 });
