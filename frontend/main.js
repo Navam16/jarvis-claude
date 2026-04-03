@@ -1,6 +1,6 @@
 // ── BACKEND URL ──
 // Change this to your Render backend URL after deployment
-const BACKEND_WS_URL = "wss://your-render-app.onrender.com/ws";
+const BACKEND_WS_URL = "wss://jarvis-claude.onrender.com/ws";
 
 // ── WEBSOCKET ──
 let ws = null;
