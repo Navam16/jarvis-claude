@@ -82,6 +82,7 @@ function handleServerMessage(data) {
 }
 
 // ── AUDIO PLAYBACK ──
+// ── AUDIO PLAYBACK ──
 async function playAudioResponse(audioBlob) {
   try {
     if (!audioContext) audioContext = new AudioContext();
@@ -91,15 +92,20 @@ async function playAudioResponse(audioBlob) {
     source.buffer = audioBuffer;
     source.connect(audioContext.destination);
     source.start(0);
-    // show wave while speaking
+    
+    // Show wave while Jarvis is speaking
     $("#Oval").attr("hidden", true);
     $("#SiriWave").attr("hidden", false);
+    
+    // WHEN JARVIS FINISHES SPEAKING:
     source.onended = () => {
-      ShowHood();
+      // Instead of resetting to idle (ShowHood), automatically start listening again!
+      startRecording();
     };
+    
   } catch (e) {
     console.error("Audio playback error:", e);
-    ShowHood();
+    ShowHood(); // If there is an error playing audio, go back to idle
   }
 }
 
