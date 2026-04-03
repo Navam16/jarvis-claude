@@ -206,14 +206,16 @@ $(document).ready(function () {
   // boot sequence — replaces eel.init()
   bootSequence();
 
-  // ── MIC BUTTON ── hold to speak
-  $("#MicBtn").on("mousedown touchstart", function (e) {
+  // ── MIC BUTTON ── click to toggle
+  $("#MicBtn").on("click", function (e) {
     e.preventDefault();
-    startRecording();
-  });
-  $("#MicBtn").on("mouseup touchend", function (e) {
-    e.preventDefault();
-    stopRecording();
+    if (!isRecording) {
+      // First click: Start listening
+      startRecording();
+    } else {
+      // Second click: Stop and send
+      stopRecording();
+    }
   });
 
   // ── SEND BUTTON ──
