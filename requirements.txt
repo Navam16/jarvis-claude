@@ -23,7 +23,7 @@ PyPDF2==3.0.1
 
 # NLP
 fuzzywuzzy==0.18.0
-python-Levenshtein==0.21.1
+rapidfuzz==3.9.3
 
 # Web & HTTP
 requests==2.31.0
