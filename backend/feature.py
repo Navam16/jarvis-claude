@@ -2,7 +2,7 @@
 Feature Module for Jarvis HR Agent
 Web deployment version:
   - Removed: eel, pyautogui, pyaudio, pywhatkit, hugchat, pvporcupine,
-              os.startfile, subprocess (desktop actions)
+             os.startfile, subprocess (desktop actions)
   - Kept: weather, news, web search, HR actions, time/date
   - HR features route to Supabase via db.py
 """
@@ -11,8 +11,10 @@ import logging
 import re
 from datetime import datetime
 
+from groq import Groq
+
 from backend.command import speak
-from backend.config import OPENWEATHERMAP_API_KEY, NEWS_API_KEY
+from backend.config import OPENWEATHERMAP_API_KEY, NEWS_API_KEY, GROQ_API_KEY
 from backend.db import (
     fetch_all_resumes,
     search_resumes_by_skills,
@@ -50,6 +52,30 @@ def get_news_fetcher():
     return _news_fetcher
 
 
+# ── Casual AI Chat (Fallback) ─────────────────────────────────────────────────
+# Initialize the Groq client for casual conversation
+chat_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
+def generate_ai_reply(user_text: str) -> str:
+    """Fallback to Groq LLM for casual conversation."""
+    if not chat_client:
+        return "I am sorry, but my conversational module is missing its API key."
+        
+    try:
+        completion = chat_client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[
+                {"role": "system", "content": "You are Jarvis, a highly capable and polite HR Assistant. Keep your answers brief, professional, and helpful."},
+                {"role": "user", "content": user_text}
+            ],
+            max_tokens=150
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Groq Chat error: {e}")
+        return "I am having trouble connecting to my conversation module right now."
+
+
 # ── Main dispatcher ───────────────────────────────────────────────────────────
 async def handle_user_text(user_text: str, language: str = "en") -> str:
     """
@@ -65,8 +91,11 @@ async def handle_user_text(user_text: str, language: str = "en") -> str:
     intent = parse_command(user_text)
     StatusIndicator.processing(f"Intent: {intent} | Input: {user_text}")
 
+    # If the user says something not on our hardcoded list, have a casual chat!
     if not intent:
-        return speak("Sorry, I did not understand that. Please try again.")
+        StatusIndicator.processing("No strict intent found. Falling back to AI chat...")
+        ai_response = generate_ai_reply(user_text)
+        return speak(ai_response)
 
     # ── Time & Date ───────────────────────────────────────────────────────────
     if intent == "get_time":
@@ -233,12 +262,15 @@ def check_red_flags() -> str:
             if flags:
                 flagged.append(f"{resume.get('name', 'Unknown')} ({', '.join(flags)})")
 
+            if len(flagged) >= 5:  # Cap at 5 for speech efficiency
+                break
+
         if not flagged:
             return speak("No red flags detected across all resumes.")
 
         return speak(
             f"Found {len(flagged)} candidate{'s' if len(flagged) > 1 else ''} with potential issues: "
-            + ". ".join(flagged[:5])
+            + ". ".join(flagged)
         )
     except Exception as e:
         logger.error(f"Red flag check error: {e}")
