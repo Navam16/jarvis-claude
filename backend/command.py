@@ -1,9 +1,8 @@
 """
 Command Module for Jarvis HR Agent
 Web deployment version:
-  - STT: Groq Whisper (replaces SpeechRecognition + pyaudio)
-  - TTS: Sarvam AI (replaces pyttsx3 + eel)
-  - WebSocket: sends messages to frontend (replaces eel.expose)
+  - STT: Groq Whisper
+  - TTS: Sarvam AI
 """
 
 import base64
@@ -23,10 +22,8 @@ from backend.feedback import StatusIndicator, Timer
 
 logger = logging.getLogger(__name__)
 
-# ── Clients ───────────────────────────────────────────────────────────────────
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Language code map: Whisper language → Sarvam target_language_code
 LANG_CODE_MAP = {
     "hi": "hi-IN",
     "en": "en-IN",
@@ -40,17 +37,8 @@ LANG_CODE_MAP = {
 }
 
 
-# ── STT: Groq Whisper ─────────────────────────────────────────────────────────
 async def transcribe_audio(audio_bytes: bytes) -> dict:
-    """
-    Transcribe audio bytes using Groq Whisper.
-
-    Args:
-        audio_bytes: Raw audio bytes (webm/wav/mp3)
-
-    Returns:
-        dict with 'text' and 'language' keys
-    """
+    """Transcribe audio bytes using Groq Whisper."""
     StatusIndicator.processing("Transcribing audio via Groq Whisper...")
     try:
         with Timer("Groq Whisper STT"):
@@ -63,33 +51,33 @@ async def transcribe_audio(audio_bytes: bytes) -> dict:
         text = transcription.text or ""
         StatusIndicator.command(f"Transcribed [{language}]: {text}")
         return {"text": text, "language": language}
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Sarvam TTS status error: {e.response.status_code}")
-        logger.error(f"Sarvam TTS response body: {e.response.text}")
-        return b""
     except Exception as e:
-        logger.error(f"Sarvam TTS error: {e}")
-        return b""
+        StatusIndicator.error(f"STT failed: {e}")
+        logger.error(f"Groq Whisper error: {e}")
+        return {"text": "", "language": "en"}
 
 
-# ── TTS: Sarvam AI ────────────────────────────────────────────────────────────
 async def text_to_speech(text: str, language: str = "en") -> bytes:
-    """
-    Convert text to speech using Sarvam AI.
-    Falls back to a silent byte string on error.
-
-    Args:
-        text: The text to speak
-        language: Whisper-detected language code ('hi', 'en', etc.)
-
-    Returns:
-        Raw WAV audio bytes
-    """
+    """Convert text to speech using Sarvam AI."""
     if not text:
         return b""
 
     lang_code = LANG_CODE_MAP.get(language, "en-IN")
     StatusIndicator.processing(f"Sarvam TTS [{lang_code}]: {text[:60]}...")
+
+    payload = {
+        "inputs": [text],
+        "target_language_code": lang_code,
+        "speaker": SARVAM_SPEAKER,
+        "model": SARVAM_MODEL,
+        "pitch": 0,
+        "pace": 1.0,
+        "loudness": 1.5,
+        "enable_preprocessing": True,
+        "audio_format": "wav",
+    }
+
+    logger.info(f"Sarvam request — model: {SARVAM_MODEL}, speaker: {SARVAM_SPEAKER}, lang: {lang_code}")
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -99,40 +87,28 @@ async def text_to_speech(text: str, language: str = "en") -> bytes:
                     "api-subscription-key": SARVAM_API_KEY,
                     "Content-Type": "application/json",
                 },
-                json={
-                    "inputs": [text],
-                    "target_language_code": lang_code,
-                    "speaker": SARVAM_SPEAKER,
-                    "model": SARVAM_MODEL,
-                    "pitch": 0,
-                    "pace": 1.0,
-                    "loudness": 1.5,
-                    "enable_preprocessing": True,
-                    "audio_format": "wav",
-                },
+                json=payload,
             )
+
+            logger.info(f"Sarvam response status: {response.status_code}")
+            logger.info(f"Sarvam response body: {response.text[:500]}")
+
             response.raise_for_status()
             data = response.json()
             audio_bytes = base64.b64decode(data["audios"][0])
-            StatusIndicator.success("TTS audio generated.")
+            StatusIndicator.success(f"TTS audio generated: {len(audio_bytes)} bytes")
             return audio_bytes
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Sarvam HTTP error {e.response.status_code}: {e.response.text}")
+        return b""
     except Exception as e:
-        StatusIndicator.error(f"Sarvam TTS failed: {e}")
         logger.error(f"Sarvam TTS error: {e}")
         return b""
 
 
-# ── speak(): convenience wrapper used by feature.py ──────────────────────────
-# In web mode, speaking is handled by the WebSocket flow in server.py.
-# This function just logs the response text so existing feature.py calls
-# don't break during the transition.
 def speak(text: str) -> str:
-    """
-    Log the response text. Actual audio is generated and sent over
-    WebSocket by server.py after the orchestrator returns.
-
-    Returns the text so callers can chain / display it.
-    """
+    """Log response text. Actual audio is sent over WebSocket by server.py."""
     text = str(text)
     StatusIndicator.response(text)
     return text
