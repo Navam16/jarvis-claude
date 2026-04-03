@@ -91,8 +91,11 @@ async def websocket_endpoint(ws: WebSocket):
 
             # ── Generate and send audio ────────────────────────────────────
             audio_bytes = await text_to_speech(response_text, language)
-            if audio_bytes:
-                await ws.send_bytes(audio_bytes)
+logger.info(f"TTS audio size: {len(audio_bytes)} bytes")
+if audio_bytes:
+    await ws.send_bytes(audio_bytes)
+else:
+    logger.error("TTS returned empty audio — check SARVAM_API_KEY")
 
             # ── Log to Supabase ────────────────────────────────────────────
             await log_conversation(user_text, response_text, language)
