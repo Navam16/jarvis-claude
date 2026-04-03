@@ -4,7 +4,14 @@ Maps voice/text commands to intents using fuzzy matching.
 Extended with HR-specific intents for web deployment.
 """
 
-from fuzzywuzzy import fuzz, process
+from rapidfuzz import fuzz, process
+```
+
+And in `requirements.txt` also remove `fuzzywuzzy==0.18.0` and replace with just `rapidfuzz==3.9.3` — rapidfuzz does everything fuzzywuzzy did but faster and supports Python 3.14.
+
+So your final `requirements.txt` fuzzy matching section should just be:
+```
+rapidfuzz==3.9.3
 
 command_map = {
     # ── Time & Date ───────────────────────────────────────────────────────────
