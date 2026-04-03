@@ -42,7 +42,6 @@ async def websocket_endpoint(ws: WebSocket):
 
     try:
         while True:
-            # Receive message — can be JSON (text command) or bytes (audio)
             message = await ws.receive()
 
             user_text = ""
@@ -59,7 +58,6 @@ async def websocket_endpoint(ws: WebSocket):
                     await ws.send_json({"type": "error", "text": "Could not transcribe audio."})
                     continue
 
-                # Send transcript back so UI can display it
                 await ws.send_json({
                     "type": "transcript",
                     "text": user_text,
@@ -91,11 +89,11 @@ async def websocket_endpoint(ws: WebSocket):
 
             # ── Generate and send audio ────────────────────────────────────
             audio_bytes = await text_to_speech(response_text, language)
-logger.info(f"TTS audio size: {len(audio_bytes)} bytes")
-if audio_bytes:
-    await ws.send_bytes(audio_bytes)
-else:
-    logger.error("TTS returned empty audio — check SARVAM_API_KEY")
+            logger.info(f"TTS audio size: {len(audio_bytes)} bytes")
+            if audio_bytes:
+                await ws.send_bytes(audio_bytes)
+            else:
+                logger.error("TTS returned empty audio - check SARVAM_API_KEY")
 
             # ── Log to Supabase ────────────────────────────────────────────
             await log_conversation(user_text, response_text, language)
