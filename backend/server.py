@@ -72,6 +72,9 @@ async def websocket_endpoint(ws: WebSocket):
                     language = data.get("language", "en")
                 except (json.JSONDecodeError, KeyError):
                     user_text = message["text"]
+                if data.get("type") == "ping":
+                    await ws.send_json({"type": "pong"})
+                    continue    
 
             if not user_text:
                 continue
