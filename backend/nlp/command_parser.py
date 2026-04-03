@@ -108,7 +108,8 @@ def parse_command(user_input: str) -> str:
 
     user_input = user_input.lower().strip()
 
-    best_match, score = process.extractOne(
+    # ADDED THE UNDERSCORE HERE to catch the index value
+    best_match, score, _ = process.extractOne(
         user_input, all_phrases.keys(), scorer=fuzz.token_sort_ratio
     )
 
