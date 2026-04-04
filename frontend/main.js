@@ -1,5 +1,4 @@
 // ── BACKEND URL ──
-// Change this to your Render backend URL after deployment
 const BACKEND_WS_URL = "wss://jarvis-claude.onrender.com/ws";
 
 // ── WEBSOCKET ──
@@ -21,19 +20,18 @@ function connectWebSocket() {
     wsConnected = true;
     $("#connection-status").text("Connected").css("color", "#00ff88");
     console.log("WebSocket connected");
-    
+
     // keepalive ping every 20 seconds to prevent Render timeout
     setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "ping" }));
-        }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
     }, 20000);
-};
+  };
 
   ws.onclose = () => {
     wsConnected = false;
     $("#connection-status").text("Disconnected — retrying...").css("color", "#ff4444");
-    // auto reconnect after 3 seconds
     setTimeout(connectWebSocket, 3000);
   };
 
@@ -61,23 +59,18 @@ function connectWebSocket() {
 function handleServerMessage(data) {
   switch (data.type) {
     case "transcript":
-      // user's speech transcribed — show in chat
+      // show user's transcribed speech in chat — stays permanently
       senderText(data.text);
-      DisplayMessage("Processing...");
+      setStatusText("Processing...");
       break;
 
     case "response":
-      // agent text response
+      // show agent response in chat — stays permanently
       receiverText(data.text);
-      DisplayMessage(data.text);
-      
-      // AUTO-START LISTENING AFTER TEXT ARRIVES
-      // Wait 2 seconds so you have time to read his text before the mic opens
-      setTimeout(() => {
-        if (!isRecording) {
-           startRecording();
-        }
-      }, 2000);
+      // just update the small status label, NOT the chat
+      setStatusText("Response received.");
+      // go back to idle orb — mic does NOT auto-start
+      ShowHood();
       break;
 
     case "error":
@@ -86,7 +79,6 @@ function handleServerMessage(data) {
       break;
 
     case "ready":
-      // backend signals it's ready after boot
       ShowHood();
       break;
 
@@ -105,25 +97,32 @@ async function playAudioResponse(audioBlob) {
     source.buffer = audioBuffer;
     source.connect(audioContext.destination);
     source.start(0);
-    
-    // Show wave while Jarvis is speaking
+
+    // show wave while Jarvis is speaking
     $("#Oval").attr("hidden", true);
     $("#SiriWave").attr("hidden", false);
-    
-    // WHEN JARVIS FINISHES SPEAKING:
+    setStatusText("Speaking...");
+
+    // when Jarvis finishes speaking — go back to idle, do NOT auto-start mic
     source.onended = () => {
-      // Instead of resetting to idle (ShowHood), automatically start listening again!
-      startRecording();
+      ShowHood();
+      setStatusText("Ask me anything...");
     };
-    
+
   } catch (e) {
     console.error("Audio playback error:", e);
-    ShowHood(); // If there is an error playing audio, go back to idle
+    ShowHood();
   }
+}
+
+// ── STATUS TEXT (small label only — does NOT affect chat) ──
+function setStatusText(msg) {
+  $("#connection-status").text(msg);
 }
 
 // ── VOICE CAPTURE & SILENCE DETECTION ──
 async function startRecording() {
+  if (isRecording) return; // prevent double trigger
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioContext = new AudioContext();
@@ -131,10 +130,10 @@ async function startRecording() {
     audioChunks = [];
     isRecording = true;
 
-    // --- SILENCE DETECTION LOGIC ---
+    // silence detection
     const analyser = audioContext.createAnalyser();
-    const source = audioContext.createMediaStreamSource(stream);
-    source.connect(analyser);
+    const micSource = audioContext.createMediaStreamSource(stream);
+    micSource.connect(analyser);
     analyser.fftSize = 256;
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -143,27 +142,20 @@ async function startRecording() {
       clearTimeout(silenceTimeout);
       silenceTimeout = setTimeout(() => {
         if (isRecording) {
-          console.log("5 seconds of silence detected. Auto-stopping.");
+          console.log("5 seconds silence — auto stopping.");
           stopRecording();
         }
-      }, 5000); 
+      }, 5000);
     };
 
     volumeCheckInterval = setInterval(() => {
       analyser.getByteFrequencyData(dataArray);
       let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-      let averageVolume = sum / bufferLength;
-
-      if (averageVolume > 10) { 
-        resetSilenceTimer();
-      }
+      for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+      if (sum / bufferLength > 10) resetSilenceTimer();
     }, 200);
 
     resetSilenceTimer();
-    // -------------------------------
 
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) audioChunks.push(e.data);
@@ -173,10 +165,10 @@ async function startRecording() {
       const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
       const arrayBuffer = await audioBlob.arrayBuffer();
       if (wsConnected && ws) {
-        // send as binary
         ws.send(arrayBuffer);
       } else {
         receiverText("Not connected to backend. Please wait...");
+        ShowHood();
       }
       isRecording = false;
     };
@@ -184,35 +176,26 @@ async function startRecording() {
     mediaRecorder.start();
     $("#Oval").attr("hidden", true);
     $("#SiriWave").attr("hidden", false);
-    
-    // UI Updates: Show the stop button and format text
     $("#StopMicBtn").removeAttr("hidden");
-    DisplayMessage("Listening...");
-    $("#MicBtn").css("color", "#ff4444");
+    $("#MicBtn").addClass("recording");
+    setStatusText("Listening...");
 
   } catch (err) {
     console.error("Mic error:", err);
+    isRecording = false;
     alert("Microphone access denied. Please allow microphone access.");
   }
 }
 
 function stopRecording() {
-  if (mediaRecorder && isRecording) {
-    mediaRecorder.stop();
-    // Turn off the microphone hardware
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    
-    // Turn off the silence trackers
-    clearInterval(volumeCheckInterval);
-    clearTimeout(silenceTimeout);
-    
-    // Change the screen text so you know it stopped
-    DisplayMessage("Transcribing..."); 
-    $("#MicBtn").css("color", "#ffffff");
-    
-    // UI Updates: Hide the stop button
-    $("#StopMicBtn").attr("hidden", true);
-  }
+  if (!mediaRecorder || !isRecording) return;
+  mediaRecorder.stop();
+  mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  clearInterval(volumeCheckInterval);
+  clearTimeout(silenceTimeout);
+  setStatusText("Transcribing...");
+  $("#MicBtn").removeClass("recording");
+  $("#StopMicBtn").attr("hidden", true);
 }
 
 // ── SEND TEXT MESSAGE ──
@@ -220,11 +203,10 @@ function PlayAssistant(message) {
   if (message.trim() === "") return;
   senderText(message);
   $("#chatbox").val("");
-  $("#MicBtn").attr("hidden", false);
-  $("#SendBtn").attr("hidden", true);
+  ShowHideButton("");
   $("#Oval").attr("hidden", true);
   $("#SiriWave").attr("hidden", false);
-  DisplayMessage("Processing...");
+  setStatusText("Processing...");
 
   if (wsConnected && ws) {
     ws.send(JSON.stringify({ type: "text", text: message }));
@@ -258,51 +240,35 @@ $(document).ready(function () {
     autostart: true,
   });
 
-  // textillate on siri-message
-  $(".siri-message").textillate({
-    loop: true,
-    sync: true,
-    in: { effect: "fadeInUp", sync: true },
-    out: { effect: "fadeOutUp", sync: true },
-  });
-
   // connect WebSocket
   connectWebSocket();
 
-  // boot sequence — replaces eel.init()
+  // boot sequence
   bootSequence();
 
-  // ── MIC BUTTON ── click to toggle
+  // ── MIC BUTTON — click to toggle ──
   $("#MicBtn").on("click", function (e) {
     e.preventDefault();
     if (!isRecording) {
-      // First click: Start listening
       startRecording();
     } else {
-      // Second click: Stop and send
       stopRecording();
     }
   });
 
-  // ── NEW STOP BUTTON CLICK ──
+  // ── STOP BUTTON ──
   $("#StopMicBtn").on("click", function () {
-    if (isRecording) {
-      stopRecording();
-    }
+    if (isRecording) stopRecording();
   });
 
   // ── CLICK WAVE TO STOP ──
-  // If the mic button is hidden, clicking the wave animation will stop it
   $("#siri-container, #SiriWave").on("click", function () {
-    if (isRecording) {
-      stopRecording();
-    }
+    if (isRecording) stopRecording();
   });
 
   // ── SEND BUTTON ──
   $("#SendBtn").on("click", function () {
-    const message = $("#chatbox").val();
-    PlayAssistant(message);
+    PlayAssistant($("#chatbox").val());
   });
 
   // ── CHATBOX INPUT ──
@@ -311,31 +277,24 @@ $(document).ready(function () {
   });
 
   $("#chatbox").on("keypress", function (e) {
-    if (e.which === 13) {
-      PlayAssistant($(this).val());
-    }
+    if (e.which === 13) PlayAssistant($(this).val());
   });
 
   // ── CHAT TOGGLE ──
   $("#ChatBtn").on("click", function () {
-    const canvas = $("#chat-canvas");
-    canvas.toggle();
+    $("#chat-canvas").toggle();
   });
 
-  // ── KEYBOARD SHORTCUT (Cmd+J / Ctrl+J) ──
-  // Updated to act as a toggle as well
+  // ── KEYBOARD SHORTCUT Ctrl+J / Cmd+J ──
   document.addEventListener("keyup", function (e) {
     if (e.key === "j" && (e.metaKey || e.ctrlKey)) {
-      if (!isRecording) {
-        startRecording();
-      } else {
-        stopRecording();
-      }
+      if (!isRecording) startRecording();
+      else stopRecording();
     }
   });
 });
 
-// ── BOOT SEQUENCE (replaces eel init flow) ──
+// ── BOOT SEQUENCE ──
 function bootSequence() {
   const steps = [
     { delay: 800,  msg: "Loading neural core..." },
@@ -346,17 +305,9 @@ function bootSequence() {
   ];
 
   steps.forEach(s => {
-    setTimeout(() => {
-      $("#WishMessage").text(s.msg);
-    }, s.delay);
+    setTimeout(() => { $("#WishMessage").text(s.msg); }, s.delay);
   });
 
-  // after boot — show HelloGreet then transition to Oval
-  setTimeout(() => {
-    $("#HelloGreet").attr("hidden", false);
-  }, 4800);
-
-  setTimeout(() => {
-    hideStart();
-  }, 6000);
+  setTimeout(() => { $("#HelloGreet").attr("hidden", false); }, 4800);
+  setTimeout(() => { hideStart(); }, 6000);
 }
