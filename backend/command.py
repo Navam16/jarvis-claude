@@ -68,14 +68,14 @@ async def text_to_speech(text: str, language: str = "en") -> bytes:
     payload = {
         "inputs": [text],
         "target_language_code": lang_code,
-        "speaker": SARVAM_SPEAKER,
-        "model": SARVAM_MODEL,
+        "speaker": "anushka",
+        "model": "bulbul:v3",
         "pace": 1.0,
         "enable_preprocessing": True,
         "audio_format": "wav",
     }
 
-    logger.info(f"Sarvam request — model: {SARVAM_MODEL}, speaker: {SARVAM_SPEAKER}, lang: {lang_code}")
+    logger.info(f"Sarvam request — model: {"bulbul:v3"}, speaker: {"anushka"}, lang: {lang_code}")
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
